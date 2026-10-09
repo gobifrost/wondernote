@@ -38,6 +38,11 @@ Choose `--org <organization>` instead of `--global` for a single organization.
 The release source ZIP can be installed with `bifrost solution install
 <zip-path> --global`. Credentials, table rows, and user records are not included.
 
+When upgrading an existing installation, select its install ID with `--solution`
+to preserve its scope. Access gates are install-local; set
+`bifrost solution update . --solution <install-id> --no-allow-outbound-access`
+after upgrading an older installation that allowed shared workspace fallback.
+
 The agent is available to authenticated users in its installed scope. The
 package supplies no additional access role; each workflow checks record ownership
 and explicit sharing permissions. To restrict who can chat with the agent,
