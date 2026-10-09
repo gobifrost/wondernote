@@ -1,0 +1,851 @@
+tables:
+  a045d563-428d-4906-8bba-61f98b889f30:
+    id: a045d563-428d-4906-8bba-61f98b889f30
+    name: wondernote_records
+    description: User-owned notes and todos; the durable source of truth for WonderNote.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: space_id
+        type: string
+        required: true
+        description: Personal, named shared-space, or single-item sharing boundary.
+      - name: record_type
+        type: string
+        required: true
+        description: note | todo
+      - name: title
+        type: string
+        required: true
+      - name: content
+        type: text
+      - name: state
+        type: string
+        required: true
+        default: active
+        description: active | done | archived
+      - name: triage_state
+        type: string
+        required: true
+        default: inbox
+        description: inbox | organized
+      - name: due_at
+        type: string
+      - name: completed_at
+        type: string
+      - name: archived_at
+        type: string
+      - name: parent_id
+        type: string
+      - name: source_key
+        type: string
+        description: Stable idempotency key for imports
+      - name: source
+        type: json
+      - name: metadata_snapshot
+        type: json
+        description: Denormalized display snapshot backed by wondernote_record_metadata
+      - name: updated_at_user
+        type: string
+      - name: revision
+        type: number
+        description: Current version number; prior versions live in wondernote_record_revisions
+      - name: last_edited_by
+        type: string
+        description: User id that produced the current version
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: The durable owner retains full access.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: shared_space_read
+      description: Viewers and editors may read rows in a granted space.
+      actions:
+      - read
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_readable_space_ids
+    - name: shared_space_create
+      description: Editors may create records only in a named shared space, never
+        beside a directly shared item.
+      actions:
+      - create
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_writable_named_space_ids
+    - name: shared_space_update
+      description: Editors may update the existing record in any writable granted
+        space.
+      actions:
+      - update
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_writable_space_ids
+  a38bf67e-4f38-4af9-adf7-4a18097767ab:
+    id: a38bf67e-4f38-4af9-adf7-4a18097767ab
+    name: wondernote_concepts
+    description: Per-user canonical vocabulary for properties, entity types, entities,
+      options, and aliases.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: space_id
+        type: string
+        required: true
+        description: Vocabulary is isolated to one WonderNote space.
+      - name: kind
+        type: string
+        required: true
+        description: property | entity_type | entity | option
+      - name: canonical_name
+        type: string
+        required: true
+      - name: normalized_name
+        type: string
+        required: true
+      - name: parent_id
+        type: string
+      - name: aliases
+        type: json
+      - name: value_type
+        type: string
+      - name: description
+        type: text
+      - name: state
+        type: string
+        required: true
+        default: active
+        description: active | merged
+      - name: merged_into_id
+        type: string
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: The durable owner retains full access.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: shared_space_read
+      description: Viewers and editors may read concepts in a granted space.
+      actions:
+      - read
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_readable_space_ids
+    - name: shared_space_write
+      description: Editors may create and update vocabulary in a granted space.
+      actions:
+      - create
+      - update
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_writable_space_ids
+  a158df4a-09bf-45b3-b5db-e41a589d1edf:
+    id: a158df4a-09bf-45b3-b5db-e41a589d1edf
+    name: wondernote_record_metadata
+    description: Normalized record-to-property/value assignments referencing canonical
+      WonderNote concepts.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: space_id
+        type: string
+        required: true
+      - name: record_id
+        type: string
+        required: true
+      - name: property_id
+        type: string
+        required: true
+      - name: property_name
+        type: string
+        required: true
+      - name: concept_id
+        type: string
+      - name: value_kind
+        type: string
+        required: true
+        description: entity | option | literal
+      - name: value
+        type: json
+      - name: display_value
+        type: string
+        required: true
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: The durable owner retains full access.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: shared_space_read
+      description: Viewers and editors may read metadata rows in a granted space.
+      actions:
+      - read
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_readable_space_ids
+    - name: shared_space_write
+      description: Editors may replace normalized metadata rows in a granted space.
+      actions:
+      - create
+      - update
+      - delete
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_writable_space_ids
+  dccd73fe-ec30-4a31-9fb7-bf93322e12eb:
+    id: dccd73fe-ec30-4a31-9fb7-bf93322e12eb
+    name: wondernote_spaces
+    description: Personal, named shared, and single-item sharing contexts for WonderNote.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: kind
+        type: string
+        required: true
+        description: personal | shared_space | shared_item
+      - name: name
+        type: string
+        required: true
+      - name: description
+        type: text
+        description: Optional one-line summary of what belongs in a named shared space
+      - name: state
+        type: string
+        required: true
+        default: active
+        description: active | archived
+      - name: migration_version
+        type: number
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: Space owners create and manage their spaces.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: member_read
+      description: A granted member may discover the shared space.
+      actions:
+      - read
+      when:
+        in:
+        - row: id
+        - claims: wondernote_readable_space_ids
+  daf9c267-504c-477c-92c3-6c1f81be5eeb:
+    id: daf9c267-504c-477c-92c3-6c1f81be5eeb
+    name: wondernote_space_grants
+    description: One user or organization grant per WonderNote sharing context.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: space_id
+        type: string
+        required: true
+      - name: space_kind
+        type: string
+        required: true
+        description: Denormalized shared_space | shared_item boundary for create claims.
+      - name: principal_type
+        type: string
+        required: true
+        description: user | organization
+      - name: principal_id
+        type: string
+        required: true
+      - name: principal_label
+        type: string
+      - name: permission
+        type: string
+        required: true
+        description: read | write
+      - name: state
+        type: string
+        required: true
+        default: active
+        description: active | revoked
+      - name: revoked_at
+        type: string
+      - name: updated_at_user
+        type: string
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_manage_existing
+      description: A space owner may inspect, change, or revoke grants they created.
+      actions:
+      - read
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: owner_create
+      description: A user may create grants only for a space they own.
+      actions:
+      - create
+      when:
+        and:
+        - eq:
+          - row: owner_id
+          - user: user_id
+        - in:
+          - row: space_id
+          - claims: wondernote_owned_space_ids
+    - name: active_principal_read
+      description: Users may read only their own active direct or organization grant.
+      actions:
+      - read
+      when:
+        and:
+        - eq:
+          - row: state
+          - active
+        - or:
+          - and:
+            - eq:
+              - row: principal_type
+              - user
+            - eq:
+              - row: principal_id
+              - user: user_id
+          - and:
+            - eq:
+              - row: principal_type
+              - organization
+            - eq:
+              - row: principal_id
+              - user: organization_id
+  8f25f9d6-de50-4025-9191-b5ee2a149efc:
+    id: 8f25f9d6-de50-4025-9191-b5ee2a149efc
+    name: wondernote_import_runs
+    description: Reconciliation ledger for idempotent WonderNote migrations.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: source
+        type: string
+        required: true
+      - name: started_at
+        type: string
+        required: true
+      - name: completed_at
+        type: string
+      - name: expected
+        type: number
+      - name: inserted
+        type: number
+      - name: updated
+        type: number
+      - name: skipped
+        type: number
+      - name: errors
+        type: json
+      - name: reconciliation
+        type: json
+    policies: &id001
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: Only the owning user may access these personal operational rows.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+  f9be5c56-5ca0-445a-9cd5-9b9dcd100a6f:
+    id: f9be5c56-5ca0-445a-9cd5-9b9dcd100a6f
+    name: wondernote_reminders
+    description: User-owned deterministic reminder occurrences attached to WonderNote
+      records.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: record_id
+        type: string
+        required: true
+      - name: remind_at
+        type: string
+        required: true
+      - name: channel
+        type: string
+        required: true
+        description: Delivery adapter; currently teams.
+      - name: recipient
+        type: string
+        required: true
+      - name: message
+        type: text
+      - name: state
+        type: string
+        required: true
+        description: creating | scheduled | dispatching | dispatched | sent | cancelled
+          | skipped | failed
+      - name: schedule_execution_id
+        type: string
+      - name: delivery_execution_id
+        type: string
+      - name: dispatched_at
+        type: string
+      - name: sent_at
+        type: string
+      - name: cancelled_at
+        type: string
+      - name: last_error
+        type: text
+    policies: *id001
+  3a3ca402-ec4e-4ed9-bc0c-39f46a5b4a46:
+    id: 3a3ca402-ec4e-4ed9-bc0c-39f46a5b4a46
+    name: wondernote_digest_prefs
+    description: Per-user morning/evening priority digest preferences for WonderNote.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: slot
+        type: string
+        required: true
+        description: Free-form schedule name, e.g. morning
+      - name: enabled
+        type: boolean
+        required: true
+      - name: local_time
+        type: string
+        required: true
+        description: HH:MM 24h in the user's timezone
+      - name: timezone
+        type: string
+        required: true
+        description: IANA timezone, e.g. America/New_York
+      - name: days_of_week
+        type: json
+        description: Optional recurrence as day codes mon..sun; null means daily.
+          Shorthands weekdays/weekends accepted at write time.
+      - name: day_of_month
+        type: json
+        description: Optional month days 1-31, e.g. [1] for the first of every month;
+          null means every day
+      - name: cron_expression
+        type: text
+        description: Optional 5-field cron escape hatch for anything else; authoritative
+          when set
+      - name: scope
+        type: string
+        required: true
+        description: personal | shared | all
+      - name: space_ids
+        type: json
+        description: Optional exact space id allow-list; null means scope semantics
+      - name: kinds
+        type: json
+        description: Optional shared-kind filter among shared_space and shared_item
+      - name: filters
+        type: json
+        description: Optional record filters such as metadata property-to-value mapping
+      - name: limit
+        type: number
+      - name: custom_prompt
+        type: text
+        description: User-authored focus and formatting guidance for this slot
+      - name: updated_at_user
+        type: string
+    policies: &id002
+    - name: admin_bypass
+      description: Platform admins bypass all checks.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: Only the owning user may access these personal operational rows.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+  57e33b1f-93ad-4f99-b31d-2fa0ea680553:
+    id: 57e33b1f-93ad-4f99-b31d-2fa0ea680553
+    name: wondernote_digest_runs
+    description: Delivery ledger for WonderNote priority digest executions.
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: slot
+        type: string
+        required: true
+      - name: prefs_id
+        type: string
+      - name: scheduled_for
+        type: string
+      - name: state
+        type: string
+        required: true
+        description: queued | skipped | failed
+      - name: item_count
+        type: number
+      - name: delivery_execution_id
+        type: string
+      - name: error
+        type: text
+    policies: *id002
+  e9e62bd6-1666-40c3-a217-dd3598396c39:
+    id: e9e62bd6-1666-40c3-a217-dd3598396c39
+    name: artifacts
+    description: Polymorphic notes workspace artifacts (journal/reminder/question/project/note/decision)
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+        description: "Creating user's UUID \u2014 access policy field"
+      - name: organization_id
+        type: string
+        required: true
+        description: "Tenant scope \u2014 access policy field"
+      - name: shared
+        type: boolean
+        description: If true, readable/writable by org members
+        default: false
+      - name: type
+        type: string
+        required: true
+        description: journal | reminder | question | project | note | decision
+      - name: title
+        type: string
+        description: Auto-derived from first line if blank
+      - name: body
+        type: text
+        description: Markdown source of truth
+      - name: details
+        type: json
+        description: Per-type fields (due_at, status, answer, etc.)
+      - name: tags
+        type: json
+        description: Array of tag strings extracted from body
+      - name: todos
+        type: json
+        description: Array of {text, done, due?} objects
+      - name: refs
+        type: json
+        description: Array of {type, id, display} entity references
+      - name: parent_id
+        type: string
+        description: Hierarchical parent artifact id
+      - name: pinned
+        type: boolean
+        default: false
+      - name: last_clarified_at
+        type: string
+        description: ISO timestamp; null = unclarified
+      - name: last_reviewed_at
+        type: string
+        description: ISO timestamp; reset by Review perspective
+    policies: &id003
+    - name: admin_bypass
+      description: Platform admins bypass all checks.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: Creator has full CRUD on their own artifacts.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: created_by
+        - user: user_id
+  759fae09-59a3-41d5-844c-28ebc2839a3d:
+    id: 759fae09-59a3-41d5-844c-28ebc2839a3d
+    name: artifact_links
+    description: Many-to-many non-hierarchical relationships between artifacts
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: from_id
+        type: string
+        required: true
+      - name: to_id
+        type: string
+        required: true
+      - name: relationship
+        type: string
+        required: true
+        description: relates_to | blocks | follows_up_on | answers | superseded_by
+    policies: *id003
+  afbd8075-061f-4031-9b52-e7e4d06e6962:
+    id: afbd8075-061f-4031-9b52-e7e4d06e6962
+    name: clarify_sessions
+    description: Persisted Clarify agent conversation state (turn_history + pending_proposals)
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+      - name: organization_id
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+        description: active | done | abandoned
+        default: active
+      - name: source_artifact_ids
+        type: json
+        required: true
+        description: Array of artifact UUIDs being clarified
+      - name: turn_history
+        type: json
+        required: true
+        description: Append-only array of Turn objects
+      - name: pending_proposals
+        type: json
+        description: Staged Proposal objects awaiting commit
+    policies: *id003
+  a11140f4-5f14-4243-a7ee-293254022a3f:
+    id: a11140f4-5f14-4243-a7ee-293254022a3f
+    name: workspace_state
+    description: Per-user UI state for the WonderNote app (open tabs, perspective,
+      etc.)
+    schema:
+      columns:
+      - name: owner_id
+        type: string
+        required: true
+        description: "Owning user UUID \u2014 one row per user"
+      - name: organization_id
+        type: string
+        required: true
+        description: Tenant scope
+      - name: open_tab_ids
+        type: json
+        description: Ordered array of artifact UUIDs the user has open as tabs
+      - name: active_perspective
+        type: string
+        description: today | journal | review | notes
+      - name: browse_type
+        type: string
+        description: Notes-sidebar artifact-type filter
+      - name: sidebar_width
+        type: number
+        description: Sidebar pixel width
+      - name: collapsed_sections
+        type: json
+        description: Array of section names the user has collapsed (e.g. "pinned")
+      - name: collapsed_tags
+        type: json
+        description: Array of tag names the user has collapsed in the Notes tree
+    policies: *id003
+  32839918-c84a-4a52-8c2a-7881b4e82d27:
+    id: 32839918-c84a-4a52-8c2a-7881b4e82d27
+    name: wondernote_record_revisions
+    description: Immutable prior versions of WonderNote records, kept in the record's current space.
+    schema:
+      columns:
+      - name: record_id
+        type: string
+        required: true
+      - name: owner_id
+        type: string
+        required: true
+        description: Owner of the record's space
+      - name: organization_id
+        type: string
+        required: true
+      - name: space_id
+        type: string
+        required: true
+        description: Follows the record when it moves so read access matches the record.
+      - name: revision
+        type: number
+        required: true
+      - name: snapshot
+        type: json
+        required: true
+        description: Versioned record fields as they were at this revision
+      - name: edited_by
+        type: string
+        description: User id that produced this version
+      - name: edited_at
+        type: string
+      - name: replaced_by
+        type: string
+        description: User id whose update replaced this version
+      - name: replaced_at
+        type: string
+    policies:
+    - name: admin_bypass
+      description: Platform admins can perform audited migrations and maintenance.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        user: is_platform_admin
+    - name: owner_full_access
+      description: The space owner retains full access.
+      actions:
+      - read
+      - create
+      - update
+      - delete
+      when:
+        eq:
+        - row: owner_id
+        - user: user_id
+    - name: shared_space_read
+      description: Anyone who can read the record's space can read its history; only WonderNote tools write it.
+      actions:
+      - read
+      when:
+        in:
+        - row: space_id
+        - claims: wondernote_readable_space_ids

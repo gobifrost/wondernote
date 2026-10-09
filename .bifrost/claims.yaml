@@ -1,0 +1,115 @@
+claims:
+  9a85de64-60cf-490c-8924-3ac8a427deb4:
+    id: 9a85de64-60cf-490c-8924-3ac8a427deb4
+    name: wondernote_owned_space_ids
+    description: Active WonderNote spaces owned by the current user.
+    type: list
+    query:
+      table: wondernote_spaces
+      where:
+        and:
+        - eq:
+          - row: owner_id
+          - user: user_id
+        - eq:
+          - row: state
+          - active
+      select: id
+  4d6837ca-ea57-4db2-a4d4-7654f18610aa:
+    id: 4d6837ca-ea57-4db2-a4d4-7654f18610aa
+    name: wondernote_readable_space_ids
+    description: Active direct or organization spaces the current user may read.
+    type: list
+    query:
+      table: wondernote_space_grants
+      where:
+        and:
+        - eq:
+          - row: state
+          - active
+        - in:
+          - row: permission
+          - - read
+            - write
+        - or:
+          - and:
+            - eq:
+              - row: principal_type
+              - user
+            - eq:
+              - row: principal_id
+              - user: user_id
+          - and:
+            - eq:
+              - row: principal_type
+              - organization
+            - eq:
+              - row: principal_id
+              - user: organization_id
+      select: space_id
+  a5dcb610-1d20-4d5b-a885-29d0c1590c85:
+    id: a5dcb610-1d20-4d5b-a885-29d0c1590c85
+    name: wondernote_writable_space_ids
+    description: Active direct or organization spaces the current user may edit.
+    type: list
+    query:
+      table: wondernote_space_grants
+      where:
+        and:
+        - eq:
+          - row: state
+          - active
+        - eq:
+          - row: permission
+          - write
+        - or:
+          - and:
+            - eq:
+              - row: principal_type
+              - user
+            - eq:
+              - row: principal_id
+              - user: user_id
+          - and:
+            - eq:
+              - row: principal_type
+              - organization
+            - eq:
+              - row: principal_id
+              - user: organization_id
+      select: space_id
+  272af819-5970-491f-85ba-0301ef8cb4f6:
+    id: 272af819-5970-491f-85ba-0301ef8cb4f6
+    name: wondernote_writable_named_space_ids
+    description: Named shared spaces where the current user may create additional
+      records.
+    type: list
+    query:
+      table: wondernote_space_grants
+      where:
+        and:
+        - eq:
+          - row: state
+          - active
+        - eq:
+          - row: permission
+          - write
+        - eq:
+          - row: space_kind
+          - shared_space
+        - or:
+          - and:
+            - eq:
+              - row: principal_type
+              - user
+            - eq:
+              - row: principal_id
+              - user: user_id
+          - and:
+            - eq:
+              - row: principal_type
+              - organization
+            - eq:
+              - row: principal_id
+              - user: organization_id
+      select: space_id

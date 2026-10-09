@@ -1,0 +1,6 @@
+slug: wondernote
+name: WonderNote
+version: 3.3.3
+allow_outbound_access: false
+allow_inbound_access: true
+logo: wondernote-logo.png

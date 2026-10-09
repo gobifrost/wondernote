@@ -1,0 +1,36 @@
+connections:
+  Microsoft Teams Bot:
+    integration_name: Microsoft Teams Bot
+    position: 0
+    template:
+      config_schema:
+      - key: tenant_id
+        type: string
+        required: true
+      - key: client_id
+        type: string
+        required: true
+      - key: client_secret
+        type: secret
+        required: true
+      - key: bot_handle
+        type: string
+        required: true
+      - key: teams_app_id
+        type: string
+        required: true
+      - key: bot_name
+        type: string
+        required: false
+      - key: default_team_id
+        type: string
+        required: false
+      - key: default_channel_id
+        type: string
+        required: false
+      - key: support_channel_id
+        type: string
+        required: false
+      - key: announcements_channel_id
+        type: string
+        required: false

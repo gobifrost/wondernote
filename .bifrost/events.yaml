@@ -1,0 +1,13 @@
+events:
+  e53a0906-6c86-491d-91a0-b218e6afede9:
+    id: e53a0906-6c86-491d-91a0-b218e6afede9
+    name: wondernote digest ticker
+    source_type: schedule
+    is_active: true
+    cron_expression: '*/15 * * * *'
+    timezone: UTC
+    subscriptions:
+    - id: e8d54e5c-783d-45f9-bd12-d3bb959e238f
+      target_type: workflow
+      workflow_id: f9dbee31-093e-48c1-84f0-31304227f49e
+      is_active: true
