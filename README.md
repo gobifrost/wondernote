@@ -65,6 +65,16 @@ organization. An administrator configures the integration and its organization
 mapping outside this repository; the Solution carries only the schema, never
 values, mappings, or secrets.
 
+If your instance already has this bot integration configured, reuse its existing
+organization mapping. WonderNote does not require a second bot and its deployment
+does not replace the shared Teams workflows or Teams Concierge.
+
+For inbound bot activities, follow the website's [Microsoft Teams event-source
+setup](https://gobifrost.com/docs/how-to-guides/events/microsoft-event-sources/#microsoft-teams)
+and [event subscription guide](https://gobifrost.com/docs/how-to-guides/events/subscriptions/).
+These pages cover Bifrost event routing; the delivery configuration below still
+requires an existing Microsoft bot registration and published Teams app.
+
 Required configuration keys are `tenant_id`, `client_id`, `client_secret`,
 `bot_handle`, and `teams_app_id`. Optional keys are `bot_name`,
 `default_team_id`, `default_channel_id`, `support_channel_id`, and
