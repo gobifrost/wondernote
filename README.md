@@ -69,11 +69,12 @@ If your instance already has this bot integration configured, reuse its existing
 organization mapping. WonderNote does not require a second bot and its deployment
 does not replace the shared Teams workflows or Teams Concierge.
 
-For inbound bot activities, follow the website's [Microsoft Teams event-source
-setup](https://gobifrost.com/docs/how-to-guides/events/microsoft-event-sources/#microsoft-teams)
+Follow the standalone [shared Microsoft Teams bot setup guide](https://gobifrost.com/docs/how-to-guides/integrations/shared-teams-bot/)
+for provider bot configuration, customer catalog upload, permissions, tenant
+mapping, and testing. That setup is shared across Bifrost applications and does
+not depend on WonderNote. For inbound activities, the guide links to the
+[Microsoft Teams event-source setup](https://gobifrost.com/docs/how-to-guides/events/microsoft-event-sources/#microsoft-teams)
 and [event subscription guide](https://gobifrost.com/docs/how-to-guides/events/subscriptions/).
-These pages cover Bifrost event routing; the delivery configuration below still
-requires an existing Microsoft bot registration and published Teams app.
 
 Required configuration keys are `tenant_id`, `bot_tenant_id`, `client_id`,
 `client_secret`, `bot_handle`, and `teams_app_id`. `tenant_id` is the customer
