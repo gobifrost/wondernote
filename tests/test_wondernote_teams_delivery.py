@@ -127,8 +127,22 @@ def test_delivery_wrapper_and_integration_are_solution_owned():
     assert teams["integration_name"] == "Microsoft Teams Bot"
     assert teams["position"] == 0
     fields = {item["key"]: item for item in teams["template"]["config_schema"]}
-    assert {"tenant_id", "client_id", "client_secret", "bot_handle"} <= fields.keys()
-    assert all(fields[key]["required"] for key in ("tenant_id", "client_id", "client_secret", "bot_handle"))
+    assert {
+        "tenant_id",
+        "bot_tenant_id",
+        "client_id",
+        "client_secret",
+        "bot_handle",
+    } <= fields.keys()
+    assert all(
+        fields[key]["required"]
+        for key in ("tenant_id", "bot_tenant_id", "client_id", "client_secret", "bot_handle")
+    )
+    assert fields["bot_tenant_id"] == {
+        "key": "bot_tenant_id",
+        "type": "string",
+        "required": True,
+    }
     assert fields["client_secret"]["type"] == "secret"
     assert {
         "teams_app_id",
@@ -193,7 +207,8 @@ def test_bundled_teams_module_uses_synthetic_http_delivery(monkeypatch):
     requests = []
     class Integration:
         config = {
-            "tenant_id": "tenant-synthetic",
+            "tenant_id": "customer-tenant-synthetic",
+            "bot_tenant_id": "provider-home-tenant-synthetic",
             "client_id": "client-synthetic",
             "client_secret": "secret-synthetic",
             "bot_handle": "bot-synthetic",
@@ -250,6 +265,21 @@ def test_bundled_teams_module_uses_synthetic_http_delivery(monkeypatch):
         "graph.microsoft.com",
         "smba.trafficmanager.net",
     }
+    token_requests = [
+        (str(request.url), kwargs["data"]["scope"])
+        for request, kwargs in requests
+        if request.url.path.endswith("/oauth2/v2.0/token")
+    ]
+    assert token_requests == [
+        (
+            "https://login.microsoftonline.com/provider-home-tenant-synthetic/oauth2/v2.0/token",
+            "https://api.botframework.com/.default",
+        ),
+        (
+            "https://login.microsoftonline.com/customer-tenant-synthetic/oauth2/v2.0/token",
+            "https://graph.microsoft.com/.default",
+        ),
+    ]
     conversation_request = next(
         kwargs["json"]
         for request, kwargs in requests

@@ -75,10 +75,15 @@ and [event subscription guide](https://gobifrost.com/docs/how-to-guides/events/s
 These pages cover Bifrost event routing; the delivery configuration below still
 requires an existing Microsoft bot registration and published Teams app.
 
-Required configuration keys are `tenant_id`, `client_id`, `client_secret`,
-`bot_handle`, and `teams_app_id`. Optional keys are `bot_name`,
-`default_team_id`, `default_channel_id`, `support_channel_id`, and
-`announcements_channel_id`.
+Required configuration keys are `tenant_id`, `bot_tenant_id`, `client_id`,
+`client_secret`, `bot_handle`, and `teams_app_id`. `tenant_id` is the customer
+Microsoft Entra tenant where WonderNote resolves users and manages the Teams
+app through Microsoft Graph. `bot_tenant_id` is the provider or home Microsoft
+Entra tenant that owns the shared bot registration; for a Teams-managed shared
+bot, set it to that bot's home tenant. The bundled module requests Microsoft
+Graph tokens from `tenant_id` and Bot Connector tokens from `bot_tenant_id`.
+Optional keys are `bot_name`, `default_team_id`, `default_channel_id`,
+`support_channel_id`, and `announcements_channel_id`.
 
 The Solution-owned delivery workflow accepts only a `user` target and verifies
 that target against the executing user's email. A reminder or digest therefore

@@ -7,6 +7,9 @@ connections:
       - key: tenant_id
         type: string
         required: true
+      - key: bot_tenant_id
+        type: string
+        required: true
       - key: client_id
         type: string
         required: true
