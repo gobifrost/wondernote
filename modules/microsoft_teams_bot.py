@@ -10,7 +10,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
-import markdown
+from modules._vendor import markdown
 from bifrost import UserError, integrations
 
 INTEGRATION_NAME = "Microsoft Teams Bot"
@@ -112,7 +112,9 @@ async def _oauth_token(
 
 def _markdown_to_teams_html(text: str) -> str:
     """Render Markdown as Teams XML while preserving bare line breaks."""
-    rendered = markdown.markdown(str(text), extensions=["nl2br"])
+    rendered = markdown.markdown(
+        str(text), extensions=["modules._vendor.markdown.extensions.nl2br"]
+    )
     rendered = re.sub(r"<br\s*/?>", "<br>", rendered, flags=re.IGNORECASE)
     rendered = re.sub(r"</p>\s*<p>", "<br><br>", rendered, flags=re.IGNORECASE)
     rendered = re.sub(r"</?p>", "", rendered, flags=re.IGNORECASE)

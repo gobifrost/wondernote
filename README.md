@@ -44,7 +44,7 @@ and explicit sharing permissions. To restrict who can chat with the agent,
 change its access configuration in `.bifrost/agents.yaml` and redeploy through
 the Solution lifecycle.
 
-For development, install `requirements.txt` and run `PYTHONPATH=. pytest -q`.
+For development, run `PYTHONPATH=. pytest -q`. Markdown formatting is bundled with the Solution under `modules/_vendor`; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 A Git-connected installation is updated with the platform's Solution Git sync;
 pushing a commit alone does not update the installed Solution.
 

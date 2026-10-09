@@ -164,7 +164,20 @@ def test_public_bundle_is_sealed_and_has_no_instance_delivery_dependency():
     assert "from modules.microsoft_teams_bot import send_message" in wrapper
     assert "INTEGRATION_NAME = \"Microsoft Teams Bot\"" in module
     assert "teams_conversation_messages" not in open("README.md").read()
-    assert Path("requirements.txt").read_text().splitlines() == ["Markdown==3.10.2"]
+    assert not Path("requirements.txt").exists()
+    assert "from modules._vendor import markdown" in module
+
+
+def test_markdown_renderer_is_vendored_with_its_license_and_provenance():
+    """Sealed Solutions cannot depend on the platform-global requirements file."""
+    module = Path("modules/microsoft_teams_bot.py").read_text()
+
+    assert "from modules._vendor import markdown" in module
+    assert not Path("requirements.txt").exists()
+    assert Path("modules/_vendor/markdown/LICENSE.md").is_file()
+    notice = Path("THIRD_PARTY_NOTICES.md").read_text()
+    assert "Python-Markdown 3.10.2" in notice
+    assert "BSD" in notice
 
 
 def test_distributable_docs_have_no_instance_specific_references():
