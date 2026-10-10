@@ -12,6 +12,7 @@ VALID_STATES = {"active", "done", "archived"}
 VALID_TRIAGE_STATES = {"inbox", "organized"}
 VALID_CONCEPT_KINDS = {"property", "entity_type", "entity", "option"}
 VALID_VALUE_TYPES = {"text", "number", "boolean", "date", "datetime", "entity", "option"}
+FIND_EXCERPT_LIMIT = 600
 
 
 def now_iso() -> str:
@@ -45,6 +46,72 @@ def derive_title(content: str, title: str | None = None) -> str:
         return title.strip()[:240]
     first = next((line.strip("# -*\t") for line in (content or "").splitlines() if line.strip()), "Untitled")
     return first[:240]
+
+
+def compact_metadata_snapshot(snapshot: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Return the durable metadata fields callers may use to select a record."""
+    return [{
+        "property_name": item.get("property_name") or item.get("property"),
+        "value": item.get("value"),
+        "display_value": item.get("display_value"),
+        "value_kind": item.get("value_kind"),
+    } for item in snapshot or []]
+
+
+def record_excerpt(content: Any, *, query: str | None = None, limit: int = FIND_EXCERPT_LIMIT) -> str:
+    """Return a bounded preview, focusing on a literal query phrase when possible."""
+    text = str(content or "")
+    if len(text) <= limit:
+        return text
+    phrase = str(query or "").strip()
+    match = text.casefold().find(phrase.casefold()) if phrase else -1
+    start = max(0, match - (limit // 4)) if match >= 0 else 0
+    prefix = "…" if start else ""
+    end = min(len(text), start + limit - len(prefix))
+    suffix = "…" if end < len(text) else ""
+    return prefix + text[start:start + limit - len(prefix) - len(suffix)] + suffix
+
+
+def compact_record(record: dict[str, Any], space: dict[str, Any], *, query: str | None = None) -> dict[str, Any]:
+    """Shape a find result without source, ownership, history, or full content."""
+    compact_space = {
+        key: space.get(key)
+        for key in ("id", "name", "description", "kind", "relationship", "permission")
+        if space.get(key) is not None
+    }
+    return {
+        "id": record.get("id"),
+        "title": record.get("title"),
+        "record_type": record.get("record_type"),
+        "state": record.get("state"),
+        "triage_state": record.get("triage_state"),
+        "due_at": record.get("due_at"),
+        "revision": record.get("revision"),
+        "space_id": record.get("space_id"),
+        "space": compact_space,
+        "excerpt": record_excerpt(record.get("content"), query=query),
+        "excerpt_truncated": len(str(record.get("content") or "")) > FIND_EXCERPT_LIMIT,
+        "metadata_snapshot": compact_metadata_snapshot(record.get("metadata_snapshot")),
+    }
+
+
+def rank_search_records(records: list[dict[str, Any]], query: str | None) -> list[dict[str, Any]]:
+    """Promote exact title matches and title phrases while preserving tie order."""
+    needle = normalize_name(query or "")
+    if not needle:
+        return records
+    exact: list[dict[str, Any]] = []
+    phrase: list[dict[str, Any]] = []
+    remainder: list[dict[str, Any]] = []
+    for record in records:
+        title = normalize_name(str(record.get("title") or ""))
+        if title == needle:
+            exact.append(record)
+        elif needle in title:
+            phrase.append(record)
+        else:
+            remainder.append(record)
+    return exact + phrase + remainder
 
 
 def normalize_metadata_items(metadata: Any) -> list[dict[str, Any]]:

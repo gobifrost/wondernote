@@ -104,7 +104,7 @@ class FakeTables:
         self.deleted.append((table, row_id))
         self.revisions.pop(row_id, None)
 
-    async def query(self, table, where=None, order_by=None, order_dir="asc", limit=100, offset=0):
+    async def query(self, table, where=None, order_by=None, order_dir="asc", limit=100, offset=0, skip_count=False):
         assert table == wondernote.REVISIONS
         rows = [row for row in self.revisions.values() if all(row.get(key) == value for key, value in (where or {}).items())]
         rows.sort(key=lambda row: row["revision"], reverse=order_dir == "desc")
