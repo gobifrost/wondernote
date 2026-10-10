@@ -44,6 +44,11 @@ workflows:
     category: WonderNote
     access_level: authenticated
     role_names: []
+    description: 'WonderNote: fetch one selected accessible note, todo, policy, standard,
+      or procedure in full, including canonical metadata and optional revision history.'
+    tool_description: 'WonderNote: fetch one selected accessible note, todo, policy,
+      standard, or procedure in full, including canonical metadata and optional revision
+      history.'
   5de22f6e-75fb-44a7-a868-2893fc9aa717:
     id: 5de22f6e-75fb-44a7-a868-2893fc9aa717
     name: wondernote_find
@@ -53,6 +58,12 @@ workflows:
     category: WonderNote
     access_level: authenticated
     role_names: []
+    description: 'WonderNote: search accessible personal or shared notes, todos, organizational
+      documentation, policies, standards, and procedures with compact previews; follow
+      next_page, then wondernote_get for selected full records.'
+    tool_description: 'WonderNote: search accessible personal or shared notes, todos,
+      organizational documentation, policies, standards, and procedures with compact
+      previews; follow next_page, then wondernote_get for selected full records.'
   675eb824-bfd0-4e91-a3b0-424d7440433c:
     id: 675eb824-bfd0-4e91-a3b0-424d7440433c
     name: wondernote_resolve

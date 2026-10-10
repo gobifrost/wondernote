@@ -14,6 +14,7 @@ from modules.wondernote_core import (
     VALID_RECORD_TYPES,
     VALID_TRIAGE_STATES,
     check_expected_revision,
+    compact_record,
     derive_title,
     metadata_pairs,
     metadata_value_type,
@@ -21,6 +22,7 @@ from modules.wondernote_core import (
     normalize_name,
     now_iso,
     parse_future_datetime,
+    rank_search_records,
     revision_changes,
     revision_snapshot,
     snapshot_matches,
@@ -158,6 +160,7 @@ async def _query_all(
             order_dir=order_dir,
             limit=500,
             offset=offset,
+            skip_count=True,
         )
         rows.extend(_doc(row) for row in result.documents)
         if len(result.documents) < 500:
@@ -256,9 +259,19 @@ async def _accessible_spaces() -> list[tuple[dict[str, Any], dict[str, Any]]]:
     current_user_id, organization_id = _identity()
     await _ensure_personal_space()
     rows = await _query_all(SPACES, where={"state": "active"}, order_by="created_at", order_dir="asc")
+    grants_by_space: dict[str, list[dict[str, Any]]] = {}
+    # Read current grants once per bounded batch, never cache permissions
+    # between executions: revoked access must disappear on the next call.
+    space_ids = [space["id"] for space in rows]
+    for start in range(0, len(space_ids), 500):
+        grants = await _query_all(GRANTS, where={
+            "space_id": {"in_": space_ids[start:start + 500]}, "state": "active",
+        })
+        for grant in grants:
+            grants_by_space.setdefault(str(grant.get("space_id")), []).append(grant)
     accessible: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for space in rows:
-        grants = await _active_grants(space["id"])
+        grants = grants_by_space.get(str(space["id"]), [])
         descriptor = space_descriptor(space, current_user_id, grants, organization_id)
         if descriptor["permission"] != "none":
             accessible.append((space, descriptor))
@@ -911,7 +924,7 @@ async def wondernote_get(record_id: str, include_history: bool = False, revision
     return result
 
 
-@tool(description="WonderNote: find accessible notes/todos. scope defaults to personal and may be personal, shared, or all; an exact space_id overrides scope. Every result includes explicit space context.")
+@tool(description="WonderNote: search accessible notes/todos with compact previews. Personal is the default scope; shared/all or an exact space_id expands it. Use next_page to continue an exhaustive search, then wondernote_get for full selected records.")
 async def wondernote_find(
     query: str | None = None,
     record_type: str | None = None,
@@ -919,10 +932,44 @@ async def wondernote_find(
     triage_state: str | None = None,
     metadata: dict | None = None,
     include_archived: bool = False,
-    limit: int = 25,
+    limit: int = 10,
     scope: str = "personal",
     space_id: str | None = None,
+    offset: int = 0,
+    include_content: bool = False,
 ) -> dict:
+    """Search compact WonderNote previews.
+
+    Args:
+        query: Optional semantic and text query.
+        record_type: Restrict results to note or todo.
+        states: Restrict lifecycle states; archived records remain excluded by default.
+        triage_state: Restrict results to inbox or organized.
+        metadata: Exact canonical metadata property/value filters.
+        include_archived: Include archived records when states is omitted.
+        limit: Results per page, clamped from 1 through 100; defaults to 10.
+        scope: personal (default), shared, or all; overridden by space_id.
+        space_id: One exact accessible space to search.
+        offset: Zero-based result offset for a subsequent page.
+        include_content: Return full record content explicitly; otherwise results are compact previews.
+    """
+    def integer(value: Any, name: str, default: int | None = None) -> int:
+        if value is None and default is not None:
+            return default
+        if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+            raise UserError(f"{name} must be an integer")
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise UserError(f"{name} must be an integer") from exc
+
+    try:
+        safe_limit = max(1, min(integer(limit, "limit", 10), 100))
+    except (TypeError, ValueError) as exc:
+        raise UserError("limit must be an integer") from exc
+    safe_offset = integer(offset, "offset", 0)
+    if safe_offset < 0:
+        raise UserError("offset must be greater than or equal to zero")
     await _ensure_personal_space()
     clean_scope = str(scope or "personal").casefold().strip()
     if clean_scope not in {"personal", "shared", "all"}:
@@ -943,7 +990,12 @@ async def wondernote_find(
     descriptors = {space["id"]: descriptor for space, descriptor in target_spaces}
     target_ids = list(descriptors)
     if not target_ids:
-        return {"items": [], "count": 0, "count_is_exact": True, "has_more": False, "scope": selected_scope}
+        return {
+            "items": [], "count": 0, "count_is_exact": True, "has_more": False,
+            "semantic_search_truncated": False, "search_incomplete": False,
+            "limit": safe_limit, "offset": safe_offset, "next_offset": None, "next_page": None,
+            "scope": selected_scope,
+        }
     wanted_states = states or (["active", "done", "archived"] if include_archived else ["active", "done"])
     if record_type and record_type not in VALID_RECORD_TYPES:
         raise UserError("record_type must be note or todo")
@@ -959,29 +1011,46 @@ async def wondernote_find(
         where["triage_state"] = triage_state
     candidates: list[dict[str, Any]] = []
     semantic_truncated = False
+    search_incomplete = False
     if query and query.strip():
-        try:
-            semantic_limit = min(max(limit * 4, 20), 100)
-            hits = await knowledge.search(
-                query.strip(),
-                namespace=[_space_namespace(item) for item in target_ids],
-                limit=semantic_limit,
-            )
-            semantic_truncated = len(hits) >= semantic_limit
-            for hit in hits:
-                key = getattr(hit, "key", None) or getattr(hit, "id", None)
-                if key:
-                    row = await _visible_document(RECORDS, str(key))
-                    if row is not None:
-                        candidates.append(_doc(row))
-        except Exception:
-            candidates = []
-    table_candidates = await _query_all(RECORDS, where=where, order_by="created_at", order_dir="desc")
+        async def semantic_hits() -> tuple[list[Any], bool]:
+            try:
+                return await knowledge.search(
+                    query.strip(),
+                    namespace=[_space_namespace(item) for item in target_ids],
+                    # An exact metadata predicate supplements namespace isolation.
+                    # Lifecycle filters use current table rows, not stale index data.
+                    metadata_filter={"space_id": target_ids[0]} if len(target_ids) == 1 else None,
+                    limit=100,
+                ), False
+            except Exception:
+                return [], True
+
+        (hits, search_incomplete), table_candidates = await asyncio.gather(
+            semantic_hits(),
+            _query_all(RECORDS, where=where, order_by="created_at", order_dir="desc"),
+        )
+        semantic_truncated = len(hits) >= 100
+        # Completeness requires these authoritative rows anyway. Reuse them
+        # instead of performing up to 100 serial gets for the same records.
+        # Deleted/moved records and stale index payloads cannot grant access.
+        by_id = {str(row["id"]): row for row in table_candidates}
+        seen_hit_ids: set[str] = set()
+        for hit in hits:
+            key = getattr(hit, "key", None) or getattr(hit, "id", None)
+            if key and str(key) not in seen_hit_ids:
+                seen_hit_ids.add(str(key))
+                if str(key) in by_id:
+                    candidates.append(by_id[str(key)])
+    else:
+        table_candidates = await _query_all(RECORDS, where=where, order_by="created_at", order_dir="desc")
     if query and query.strip():
         needle = normalize_name(query)
-        table_candidates = [row for row in table_candidates if needle in normalize_name(f"{row.get('title','')} {row.get('content','')} " + " ".join(str(item.get('display_value','')) for item in row.get('metadata_snapshot') or []))]
-    seen = {row.get("id") for row in candidates}
-    candidates.extend(row for row in table_candidates if row.get("id") not in seen)
+        if needle:
+            table_candidates = [row for row in table_candidates if needle in normalize_name(f"{row.get('title','')} {row.get('content','')} " + " ".join(str(item.get('display_value','')) for item in row.get('metadata_snapshot') or []))]
+    table_candidates.sort(key=lambda row: (str(row.get("created_at") or ""), str(row.get("id") or "")), reverse=True)
+    seen = {str(row.get("id")) for row in candidates if row.get("id") is not None}
+    candidates.extend(row for row in table_candidates if row.get("id") is not None and str(row["id"]) not in seen)
     filtered = []
     for row in candidates:
         if row.get("space_id") not in descriptors or row.get("state") not in wanted_states:
@@ -992,12 +1061,37 @@ async def wondernote_find(
             continue
         if snapshot_matches(row.get("metadata_snapshot") or [], metadata):
             filtered.append({**row, "space": descriptors[row["space_id"]]})
-    safe_limit = max(1, min(int(limit or 25), 100))
+    filtered = rank_search_records(filtered, query)
+    page = filtered[safe_offset:safe_offset + safe_limit]
+    has_more = safe_offset + safe_limit < len(filtered)
+    next_offset = safe_offset + safe_limit if has_more else None
+    next_page = None
+    if next_offset is not None:
+        next_page = {
+            "query": query,
+            "record_type": record_type,
+            "states": wanted_states,
+            "triage_state": triage_state,
+            "metadata": metadata,
+            "include_archived": include_archived,
+            "limit": safe_limit,
+            "scope": scope,
+            "space_id": space_id,
+            "offset": next_offset,
+            "include_content": include_content,
+        }
+        next_page = {key: value for key, value in next_page.items() if value is not None}
     return {
-        "items": filtered[:safe_limit],
+        "items": page if include_content else [compact_record(row, row["space"], query=query) for row in page],
         "count": len(filtered),
-        "count_is_exact": not semantic_truncated,
-        "has_more": len(filtered) > safe_limit or semantic_truncated,
+        "count_is_exact": not (semantic_truncated or search_incomplete),
+        "has_more": has_more,
+        "semantic_search_truncated": semantic_truncated,
+        "search_incomplete": semantic_truncated or search_incomplete,
+        "limit": safe_limit,
+        "offset": safe_offset,
+        "next_offset": next_offset,
+        "next_page": next_page,
         "scope": selected_scope,
     }
 
